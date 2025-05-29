@@ -1,5 +1,8 @@
 {
   "name": "@ch99q/vali",
   "version": "0.1.0",
-  "exports": "./mod.ts"
+  "exports": "./mod.ts",
+  "tasks": {
+    "bench": "export NO_COLOR=true && deno bench mod_bench.ts > BENCHMARK"
+  }
 }
