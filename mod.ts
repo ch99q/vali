@@ -1,9 +1,20 @@
 // deno-lint-ignore-file no-explicit-any
+
+/**
+ * Represents a validation issue for a specific path in the input.
+ * @property path The path to the invalid value.
+ * @property error The error message describing the issue.
+ */
 export interface Issue {
   path: string[]
   error: string
 }
 
+/**
+ * Error thrown when validation fails, containing all issues found.
+ * @extends Error
+ * @property issues The list of validation issues.
+ */
 class ValidationError extends Error {
   constructor(public issues: Issue[]) {
     super("Validation failed [" + issues.map(i => i.error).join(", ") + "]")
@@ -11,7 +22,18 @@ class ValidationError extends Error {
   }
 }
 
+/**
+ * A function that validates a value of type T.
+ * @template T The type to validate.
+ * @param value The value to validate.
+ * @returns The validated value, or throws on error.
+ */
 type Validator<T> = (value: T) => T
+
+/**
+ * Infers the type validated by a Validator.
+ * @template V The validator type.
+ */
 export type Infer<V> = V extends Validator<infer U> ? U : never
 
 type V<T> = (value: T) => true | string
@@ -34,6 +56,12 @@ type InputOf<S extends Record<string, Validator<any>>> =
   { [K in RequiredKeys<S>]: Infer<S[K]> } &
   { [K in OptionalKeys<S>]?: Exclude<Infer<S[K]>, undefined> }
 
+/**
+ * Creates a validator builder with custom rules.
+ * @param type The base type check function.
+ * @param rules The set of rules to apply.
+ * @returns A builder for composing validators.
+ */
 function validator<R extends Record<string, Rule<any, any[]>>>(
   type: (value: any) => true | string,
   rules: R
@@ -75,6 +103,11 @@ function validator<R extends Record<string, Rule<any, any[]>>>(
   return build([])
 }
 
+/**
+ * Creates a validator for objects with a given schema.
+ * @param schema The object schema.
+ * @returns A validator for the object.
+ */
 function object<S extends Record<string, Validator<any>>>(
   schema: S
 ): Validator<InputOf<S>> & { optional: () => Validator<InputOf<S> | undefined> } {
@@ -107,6 +140,13 @@ function object<S extends Record<string, Validator<any>>>(
   return fn
 }
 
+/**
+ * Creates a validator for arrays with optional rules.
+ * @template U The array element type.
+ * @returns A validator builder for arrays.
+ * @example
+ * v.array<number>().min(1).max(5)
+ */
 const array = <U = any>() => validator((a: U[]) => Array.isArray(a) ? true : 'array.invalid_type', {
   min: (len: number, e = 'array.min') => (a: U[]) => a.length >= len ? true : e,
   max: (len: number, e = 'array.max') => (a: U[]) => a.length <= len ? true : e,
@@ -126,6 +166,11 @@ const array = <U = any>() => validator((a: U[]) => Array.isArray(a) ? true : 'ar
   }
 })
 
+/**
+ * Creates a validator that accepts any of the provided validators.
+ * @param validators The validators to try.
+ * @returns A validator for the union type.
+ */
 const union = <T extends Validator<any>[]>(...validators: T) => {
   let optional = false;
   const fn = ((value: any, safe?: boolean) => {
@@ -144,6 +189,12 @@ const union = <T extends Validator<any>[]>(...validators: T) => {
   return fn;
 }
 
+/**
+ * Creates a validator for a literal value.
+ * @param value The literal value to match.
+ * @param error The error message to use.
+ * @returns A validator for the literal value.
+ */
 const literal = <T>(value: T, error = "literal.invalid_value"): Validator<T> & { optional: () => Validator<T | undefined> } => {
   let optional = false;
   const fn = ((x: any, safe?: boolean) => {
@@ -159,6 +210,11 @@ const literal = <T>(value: T, error = "literal.invalid_value"): Validator<T> & {
   return fn;
 }
 
+/**
+ * Creates a validator for an enum value.
+ * @param values The allowed values.
+ * @returns A validator for the enum.
+ */
 const enumeration = <T extends string | number>(...values: T[]): Validator<T> & { optional: () => Validator<T | undefined> } => {
   const set = new Set(values)
   let optional = false
@@ -175,6 +231,10 @@ const enumeration = <T extends string | number>(...values: T[]): Validator<T> & 
   return fn
 }
 
+/**
+ * Creates a validator for boolean values.
+ * @returns A validator for booleans.
+ */
 const boolean = (): Validator<boolean> & { optional: () => Validator<boolean | undefined> } => {
   let optional = false;
   const fn = ((x: any, safe?: boolean) => {
@@ -190,6 +250,12 @@ const boolean = (): Validator<boolean> & { optional: () => Validator<boolean | u
   return fn;
 }
 
+/**
+ * Creates a validator builder for strings with common string rules.
+ * @returns A validator builder for strings.
+ * @example
+ * v.string().min(3).max(10).regex(/^[a-z]+$/)
+ */
 const string = () => validator((s: string) => typeof s === 'string' ? true : 'string.invalid_type', {
   min: (len: number, e = 'string.min') => (s: string) => s.length >= len ? true : e,
   max: (len: number, e = 'string.max') => (s: string) => s.length <= len ? true : e,
@@ -203,11 +269,21 @@ const string = () => validator((s: string) => typeof s === 'string' ? true : 'st
   email: (e = 'string.invalid_email') => (s: string) => /^(?!\.)(?!.*\.\.)([a-z0-9_'+\-\.]*)[a-z0-9_+-]@([a-z0-9][a-z0-9\-]*\.)+[a-z]{2,}$/i.test(s) ? true : e,
 })
 
+/**
+ * Creates a validator builder for Date objects.
+ * @returns A validator builder for dates.
+ */
 const date = () => validator((d: Date) => d instanceof Date && !isNaN(d.getTime()) ? true : 'date.invalid_type', {
   min: (d: Date, e = 'date.min') => (x: Date) => x >= d ? true : e,
   max: (d: Date, e = 'date.max') => (x: Date) => x <= d ? true : e,
 });
 
+/**
+ * Creates a validator builder for numbers with common numeric rules.
+ * @returns A validator builder for numbers.
+ * @example
+ * v.number().min(0).max(100)
+ */
 const number = () => validator((n => typeof n === 'number' && !isNaN(n) ? true : 'number.invalid_type'), {
   min: (n: number, e = 'number.min') => (x: number) => x >= n ? true : e,
   max: (n: number, e = 'number.max') => (x: number) => x <= n ? true : e,
@@ -221,6 +297,10 @@ const number = () => validator((n => typeof n === 'number' && !isNaN(n) ? true :
   clamp: (mn: number, mx: number, e = 'number.clamp') => (x: number) => x >= mn && x <= mx ? true : e,
 })
 
+/**
+ * Creates a validator builder for bigint values with common rules.
+ * @returns A validator builder for bigints.
+ */
 const bigint = () => validator((n => typeof n === 'bigint' ? true : 'bigint.invalid_type'), {
   min: (n: bigint, e = 'bigint.min') => (x: bigint) => x >= n ? true : e,
   max: (n: bigint, e = 'bigint.max') => (x: bigint) => x <= n ? true : e,
@@ -234,4 +314,7 @@ const bigint = () => validator((n => typeof n === 'bigint' ? true : 'bigint.inva
   clamp: (mn: bigint, mx: bigint, e = 'bigint.clamp') => (x: bigint) => x >= mn && x <= mx ? true : e,
 })
 
+/**
+ * Collection of built-in validators and builders.
+ */
 export const v = { string, number, bigint, boolean, date, array, union, literal, enum: enumeration, object }
