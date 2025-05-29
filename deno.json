@@ -1,0 +1,5 @@
+{
+  "name": "@ch99q/vali",
+  "version": "0.1.0",
+  "exports": "./mod.ts"
+}

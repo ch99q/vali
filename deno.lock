@@ -1,0 +1,11 @@
+{
+  "version": "5",
+  "specifiers": {
+    "npm:zod@3.25.36": "3.25.36"
+  },
+  "npm": {
+    "zod@3.25.36": {
+      "integrity": "sha512-eRFS3i8T0IrpGdL8HQyqFAugGOn7jOjyGgGdtv5NY4Wkhi7lJDk732bNZ609YMIGFbLoaj6J69O1Mura23gfIw=="
+    }
+  }
+}
