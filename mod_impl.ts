@@ -260,6 +260,41 @@ const enumeration = <T extends string | number>(...values: T[]): Validator<T> & 
   return fn as any;
 }
 
+const record = <K extends string, V>(type: Validator<V>) => {
+  let optional = false;
+  function fn(x: any, safe?: boolean) {
+    if (optional && x === undefined) return safe ? { ok: true, value: x } : x;
+    if (typeof x !== 'object' || x === null || Array.isArray(x)) {
+      if (safe) return { ok: false, issues: [{ path: [], error: "record.invalid_type" }] };
+      throw new ValidationError([{ path: [], error: "record.invalid_type" }]);
+    }
+    const issues: Issue[] = [];
+    for (const key in x) {
+      const valueResult = (type as any)(x[key], true);
+      if (!valueResult.ok) {
+        for (const issue of valueResult.issues) {
+          issues.push({ path: [key, ...issue.path], error: issue.error });
+        }
+      }
+    }
+    if (issues.length > 0) {
+      if (safe) return { ok: false, issues };
+      throw new ValidationError(issues);
+    }
+    return safe ? { ok: true, value: x } : x;
+  }
+  fn.check = fn;
+  fn.optional = () => {
+    optional = true;
+    return fn as Validator<Record<K, V> | undefined>;
+  }
+  fn.path = (initialPath: string) => {
+    (fn as any).$path = initialPath;
+    return fn;
+  }
+  return fn as any;
+}
+
 /**
  * Creates a validator for boolean values.
  * @returns A validator for booleans.
@@ -346,7 +381,7 @@ const bigint = () => validator((n => typeof n === 'bigint' ? true : 'bigint.inva
 /**
  * Collection of built-in validators and builders.
  */
-export { string, number, bigint, boolean, date, array, union, literal, enumeration as enum, object }
+export { string, number, bigint, boolean, date, array, union, record, literal, enumeration as enum, object }
 export type { Infer as infer };
 
 /**

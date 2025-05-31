@@ -239,6 +239,57 @@ Deno.test("v.enum()", () => {
   assertEquals(optionalSchema.check(undefined), undefined);
 });
 
+Deno.test("v.record()", () => {
+  const schema = v.record(v.number());
+
+  // Valid cases
+  assertEquals(schema.check({ key1: 1, key2: 2 }), { key1: 1, key2: 2 });
+  assertEquals(schema.check({}), {});
+
+  // Invalid type cases
+  for (const value of ["not an object", 123, true, null, undefined]) {
+    assertThrows(() => schema.check(value as any), [{ path: [], error: "record.invalid_type" }]);
+  }
+
+  // Invalid value cases
+  assertThrows(() => schema.check({ key1: "not a number" as any }), [{ path: ["key1"], error: "number.invalid_type" }]);
+  assertThrows(() => schema.check({ key1: 1, key2: "not a number" as any }), [{ path: ["key2"], error: "number.invalid_type" }]);
+  assertThrows(() => schema.check({ key1: 1, key2: null as any }), [{ path: ["key2"], error: "number.invalid_type" }]);
+  assertThrows(() => schema.check({ key1: 1, key2: undefined as any }), [{ path: ["key2"], error: "number.invalid_type" }]);
+
+  // Optional schema
+  const optionalSchema = schema.optional();
+  assertEquals(optionalSchema.check({ key1: 1, key2: 2 }), { key1: 1, key2: 2 });
+  assertEquals(optionalSchema.check({}), {});
+  assertEquals(optionalSchema.check(undefined), undefined);
+
+  // Optional schema invalid type cases
+  for (const value of ["not an object", 123, true, null]) {
+    assertThrows(() => optionalSchema.check(value as any), [{ path: [], error: "record.invalid_type" }]);
+  }
+
+  // Optional schema invalid value cases
+  assertThrows(() => optionalSchema.check({ key1: "not a number" as any }), [{ path: ["key1"], error: "number.invalid_type" }]);
+  assertThrows(() => optionalSchema.check({ key1: 1, key2: "not a number" as any }), [{ path: ["key2"], error: "number.invalid_type" }]);
+  assertThrows(() => optionalSchema.check({ key1: 1, key2: null as any }), [{ path: ["key2"], error: "number.invalid_type" }]);
+  assertThrows(() => optionalSchema.check({ key1: 1, key2: undefined as any }), [{ path: ["key2"], error: "number.invalid_type" }]);
+
+  const unionRecordSchema = v.record(v.union([v.string(), v.number()]));
+
+  // Valid cases
+  assertEquals(unionRecordSchema.check({ key1: "value", key2: 123 }), { key1: "value", key2: 123 });
+  assertEquals(unionRecordSchema.check({ key1: "value", key2: "another value" }), { key1: "value", key2: "another value" });
+  assertEquals(unionRecordSchema.check({}), {});
+  assertEquals(unionRecordSchema.check({ key1: 123, key2: 456 }), { key1: 123, key2: 456 });
+  assertEquals(unionRecordSchema.check({ key1: "value", key2: 456 }), { key1: "value", key2: 456 });
+  assertEquals(unionRecordSchema.check({ key1: 123, key2: "another value" }), { key1: 123, key2: "another value" });
+
+  // Invalid type cases
+  for (const value of ["not an object", 123, true, null, undefined]) {
+    assertThrows(() => unionRecordSchema.check(value as any), [{ path: [], error: "record.invalid_type" }]);
+  }
+});
+
 Deno.test("v.string()", () => {
   const schema = v.string();
 
