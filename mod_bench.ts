@@ -3,11 +3,13 @@ import { v } from "./mod.ts";
 import { z } from "npm:zod@3.25.36/v4";
 import { z as zm } from "npm:zod@3.25.36/v4-mini";
 
+
 Deno.bench({
   name: "zod v4",
   group: "array() - 10k",
   fn: () => {
     const schema = z.array(z.string());
+    type Demo = z.infer<typeof schema>;
     for (let i = 0; i < 10_000; i++) {
       try {
         if (i % 2 === 0) {

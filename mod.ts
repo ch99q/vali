@@ -41,7 +41,7 @@ type Rule<T, A extends any[]> = (...args: A) => V<T>
 
 type Builder<R extends Record<string, Rule<any, any[]>>, U> = Validator<U> & {
   [K in keyof R]: (...args: Parameters<R[K]>) => Builder<R, U>
-} & { optional: () => Builder<R, U | undefined> }
+} & { optional: () => Builder<R, U | undefined>, path: (initialPath: string) => Builder<R, U> }
 
 type OptionalKeys<S extends Record<string, Validator<any>>> = {
   [K in keyof S]: undefined extends Infer<S[K]> ? K : never
@@ -56,6 +56,8 @@ type InputOf<S extends Record<string, Validator<any>>> =
   { [K in RequiredKeys<S>]: Infer<S[K]> } &
   { [K in OptionalKeys<S>]?: Exclude<Infer<S[K]>, undefined> }
 
+const INTERNAL_PATH = Symbol("custom_path");
+
 /**
  * Creates a validator builder with custom rules.
  * @param type The base type check function.
@@ -66,21 +68,22 @@ function validator<R extends Record<string, Rule<any, any[]>>>(
   type: (value: any) => true | string,
   rules: R
 ): Builder<R, R[keyof R] extends Rule<infer U, any[]> ? U : never> {
+  const path: string[] = [];
   let optional = false
   const build = (checks: V<any>[]): any => {
     const fn = ((v: any, safe?: boolean) => {
       if (optional && v === undefined) return safe ? { ok: true, value: v } : v
       const typeResult = type(v);
       if (typeResult !== true) {
-        if (safe) return { ok: false, issues: [{ path: [], error: typeResult as string }] }
-        throw new ValidationError([{ path: [], error: typeResult as string }])
+        if (safe) return { ok: false, issues: [{ path, error: typeResult as string, [INTERNAL_PATH]: path.length > 0 }] }
+        throw new ValidationError([{ path, error: typeResult as string, [INTERNAL_PATH]: path.length > 0 } as any])
       }
       let errs: Issue[] | null = null
       for (let i = 0, len = checks.length; i < len; ++i) {
         const res = checks[i](v)
         if (res !== true) {
           if (!errs) errs = []
-          errs.push({ path: [], error: res as string })
+          errs.push({ path, error: res as string, [INTERNAL_PATH]: path.length > 0 } as any)
         }
       }
       if (errs) {
@@ -93,9 +96,12 @@ function validator<R extends Record<string, Rule<any, any[]>>>(
       optional = true
       return fn
     }
-    const reserved = new Set(["length", "name", "prototype", "arguments"])
+    fn.path = (initialPath: string) => {
+      if (path.length > 0) path[path.length - 1] = initialPath;
+      path.push(initialPath);
+      return fn;
+    }
     for (const k in rules) {
-      if (reserved.has(k)) continue
       (fn as any)[k] = (...args: any[]) => build([...checks, (rules as any)[k](...args)])
     }
     return fn
@@ -110,20 +116,22 @@ function validator<R extends Record<string, Rule<any, any[]>>>(
  */
 function object<S extends Record<string, Validator<any>>>(
   schema: S
-): Validator<InputOf<S>> & { optional: () => Validator<InputOf<S> | undefined> } {
+): Validator<InputOf<S>> & { optional: () => Validator<InputOf<S> | undefined>, path: (initialPath: string) => Validator<InputOf<S>> } {
+  const path: string[] = [];
   let optional = false
   const fn = ((x: any, safe?: boolean) => {
     if (optional && x === undefined) return safe ? { ok: true, value: x } : x
     if (typeof x !== 'object' || x === null || Array.isArray(x)) {
-      if (safe) return { ok: false, issues: [{ path: [], error: "object.invalid_type" }] }
-      throw new ValidationError([{ path: [], error: "object.invalid_type" }])
+      if (safe) return { ok: false, issues: [{ path, error: "object.invalid_type" }] }
+      throw new ValidationError([{ path, error: "object.invalid_type" }])
     }
     const issues: Issue[] = []
     for (const key in schema) {
       const result = (schema[key] as any)(x[key], true)
       if (!result.ok) {
         for (const i of result.issues) {
-          issues.push({ path: [String(key), ...i.path], error: i.error })
+          console.log(key, i)
+          issues.push({ path: [...path, ...(i.path.length ? i.path : [String(key)])], error: i.error })
         }
       }
     }
@@ -132,10 +140,15 @@ function object<S extends Record<string, Validator<any>>>(
       throw new ValidationError(issues)
     }
     return safe ? { ok: true, value: x } : x
-  }) as Validator<InputOf<S>> & { optional: () => Validator<InputOf<S> | undefined> }
+  }) as Validator<InputOf<S>> & { optional: () => Validator<InputOf<S> | undefined>, path: (initialPath: string) => Validator<InputOf<S>> }
   fn.optional = () => {
     optional = true
     return fn as Validator<InputOf<S> | undefined>
+  }
+  fn.path = (initialPath: string) => {
+    if (path.length > 0) path[path.length - 1] = initialPath;
+    path.push(initialPath);
+    return fn;
   }
   return fn
 }

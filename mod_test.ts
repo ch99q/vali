@@ -17,6 +17,26 @@ const assertThrows = (fn: () => void, issues: Issue[]) => {
   }
 };
 
+Deno.test(".path()", () => {
+  const strSchema = v.string().max(5).path("first_name");
+
+  assertThrows(() => strSchema("Hello world"), [{ error: "string.max", path: ["first_name"] }])
+
+  const objSchema = v.object({
+    lv1: v.object({
+      first_name: v.string().max(5).path("some_name")
+    }).path("override_lv1"),
+    arr: v.array().min(2)
+  }).path("root");
+
+
+  assertThrows(() => objSchema({ lv1: { first_name: "Hello world" }, arr: [] }), [
+    { error: "string.max", path: ["root", "override_lv1", "some_name"] },
+    { error: "array.min", path: ["root", "arr"] }
+  ])
+
+})
+
 Deno.test("v.array()", () => {
   const schema = v.array();
 
@@ -439,7 +459,7 @@ Deno.test("v.date()", () => {
   assertThrows(() => schema(true as any), [{ path: [], error: "date.invalid_type" }]);
   assertThrows(() => schema(null as any), [{ path: [], error: "date.invalid_type" }]);
   assertThrows(() => schema(undefined as any), [{ path: [], error: "date.invalid_type" }]);
-  
+
   const optionalSchema = schema.optional();
   assertEquals(optionalSchema(date), date);
   assertEquals(optionalSchema(undefined), undefined);
