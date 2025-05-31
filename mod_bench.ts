@@ -51,9 +51,9 @@ Deno.bench({
     for (let i = 0; i < 10_000; i++) {
       try {
         if (i % 2 === 0) {
-          schema(["a", "b", "c"]); // valid
+          schema.check(["a", "b", "c"]); // valid
         } else {
-          schema(["a", "b", "c", 1 as any]); // invalid
+          schema.check(["a", "b", "c", 1 as any]); // invalid
         }
       } catch {
         // ignore validation errors
@@ -107,9 +107,9 @@ Deno.bench({
     for (let i = 0; i < 10_000; i++) {
       try {
         if (i % 2 === 0) {
-          schema(["a", "b", "c"]);
+          schema.check(["a", "b", "c"]);
         } else {
-          schema(["a", "b"]);
+          schema.check(["a", "b"]);
         }
       } catch {
         // ignore validation errors
@@ -163,9 +163,9 @@ Deno.bench({
     for (let i = 0; i < 10_000; i++) {
       try {
         if (i % 2 === 0) {
-          schema(["a", "b", "c"]);
+          schema.check(["a", "b", "c"]);
         } else {
-          schema(["a", "b", "c", "d"]);
+          schema.check(["a", "b", "c", "d"]);
         }
       } catch {
         // ignore validation errors
@@ -225,9 +225,9 @@ Deno.bench({
     for (let i = 0; i < 10_000; i++) {
       try {
         if (i % 2 === 0) {
-          schema(["a", "b", "c"]);
+          schema.check(["a", "b", "c"]);
         } else {
-          schema(["a", "b", "a"]);
+          schema.check(["a", "b", "a"]);
         }
       } catch {
         // ignore validation errors
@@ -277,9 +277,9 @@ Deno.bench({
     for (let i = 0; i < 10_000; i++) {
       try {
         if (i % 2 === 0) {
-          schema({ a: "foo", b: 1 });
+          schema.check({ a: "foo", b: 1 });
         } else {
-          schema({ a: "foo", b: "bar" } as any);
+          schema.check({ a: "foo", b: "bar" } as any);
         }
       } catch {}
     }
@@ -317,11 +317,11 @@ Deno.bench({
   name: "vali",
   group: "union() - 10k",
   fn: () => {
-    const schema = v.union(v.string(), v.number());
+    const schema = v.union([v.string(), v.number()]);
     for (let i = 0; i < 10_000; i++) {
       try {
-        if (i % 2 === 0) schema("foo");
-        else schema(true as any);
+        if (i % 2 === 0) schema.check("foo");
+        else schema.check(true as any);
       } catch {}
     }
   }
@@ -361,8 +361,8 @@ Deno.bench({
     const schema = v.literal("foo");
     for (let i = 0; i < 10_000; i++) {
       try {
-        if (i % 2 === 0) schema("foo");
-        else schema("bar");
+        if (i % 2 === 0) schema.check("foo");
+        else schema.check("bar");
       } catch {}
     }
   }
@@ -402,8 +402,8 @@ Deno.bench({
     const schema = v.enum("foo", "bar");
     for (let i = 0; i < 10_000; i++) {
       try {
-        if (i % 2 === 0) schema("foo");
-        else schema("baz" as any);
+        if (i % 2 === 0) schema.check("foo");
+        else schema.check("baz" as any);
       } catch {}
     }
   }
@@ -443,8 +443,8 @@ Deno.bench({
     const schema = v.string().min(3);
     for (let i = 0; i < 10_000; i++) {
       try {
-        if (i % 2 === 0) schema("foo");
-        else schema("fo");
+        if (i % 2 === 0) schema.check("foo");
+        else schema.check("fo");
       } catch {}
     }
   }
@@ -483,8 +483,8 @@ Deno.bench({
     const schema = v.string().max(3);
     for (let i = 0; i < 10_000; i++) {
       try {
-        if (i % 2 === 0) schema("foo");
-        else schema("fooo");
+        if (i % 2 === 0) schema.check("foo");
+        else schema.check("fooo");
       } catch {}
     }
   }
@@ -523,8 +523,8 @@ Deno.bench({
     const schema = v.string().regex(/^foo/);
     for (let i = 0; i < 10_000; i++) {
       try {
-        if (i % 2 === 0) schema("foobar");
-        else schema("barfoo");
+        if (i % 2 === 0) schema.check("foobar");
+        else schema.check("barfoo");
       } catch {}
     }
   }
@@ -564,8 +564,8 @@ Deno.bench({
     const schema = v.string().startsWith("foo");
     for (let i = 0; i < 10_000; i++) {
       try {
-        if (i % 2 === 0) schema("foobar");
-        else schema("barfoo");
+        if (i % 2 === 0) schema.check("foobar");
+        else schema.check("barfoo");
       } catch {}
     }
   }
@@ -605,8 +605,8 @@ Deno.bench({
     const schema = v.string().endsWith("bar");
     for (let i = 0; i < 10_000; i++) {
       try {
-        if (i % 2 === 0) schema("foobar");
-        else schema("barfoo");
+        if (i % 2 === 0) schema.check("foobar");
+        else schema.check("barfoo");
       } catch {}
     }
   }
@@ -646,8 +646,8 @@ Deno.bench({
     const schema = v.string().includes("oo");
     for (let i = 0; i < 10_000; i++) {
       try {
-        if (i % 2 === 0) schema("foobar");
-        else schema("barfoo");
+        if (i % 2 === 0) schema.check("foobar");
+        else schema.check("barfoo");
       } catch {}
     }
   }
@@ -687,8 +687,8 @@ Deno.bench({
     const schema = v.string().uppercase();
     for (let i = 0; i < 10_000; i++) {
       try {
-        if (i % 2 === 0) schema("foo");
-        else schema("FOO");
+        if (i % 2 === 0) schema.check("foo");
+        else schema.check("FOO");
       } catch {}
     }
   }
@@ -728,8 +728,8 @@ Deno.bench({
     const schema = v.string().lowercase();
     for (let i = 0; i < 10_000; i++) {
       try {
-        if (i % 2 === 0) schema("FOO");
-        else schema("foo");
+        if (i % 2 === 0) schema.check("FOO");
+        else schema.check("foo");
       } catch {}
     }
   }
@@ -769,8 +769,8 @@ Deno.bench({
     const schema = v.string().email();
     for (let i = 0; i < 10_000; i++) {
       try {
-        if (i % 2 === 0) schema("test@example.com");
-        else schema("invalid-email");
+        if (i % 2 === 0) schema.check("test@example.com");
+        else schema.check("invalid-email");
       } catch {}
     }
   }
@@ -810,8 +810,8 @@ Deno.bench({
     const schema = v.string().len(3);
     for (let i = 0; i < 10_000; i++) {
       try {
-        if (i % 2 === 0) schema("foo");
-        else schema("foobar");
+        if (i % 2 === 0) schema.check("foo");
+        else schema.check("foobar");
       } catch {}
     }
   }
@@ -851,8 +851,8 @@ Deno.bench({
     const schema = v.number().min(3);
     for (let i = 0; i < 10_000; i++) {
       try {
-        if (i % 2 === 0) schema(3);
-        else schema(2);
+        if (i % 2 === 0) schema.check(3);
+        else schema.check(2);
       } catch {}
     }
   }
@@ -891,8 +891,8 @@ Deno.bench({
     const schema = v.number().max(3);
     for (let i = 0; i < 10_000; i++) {
       try {
-        if (i % 2 === 0) schema(3);
-        else schema(4);
+        if (i % 2 === 0) schema.check(3);
+        else schema.check(4);
       } catch {}
     }
   }
@@ -931,8 +931,8 @@ Deno.bench({
     const schema = v.number().positive();
     for (let i = 0; i < 10_000; i++) {
       try {
-        if (i % 2 === 0) schema(3);
-        else schema(-3);
+        if (i % 2 === 0) schema.check(3);
+        else schema.check(-3);
       } catch {}
     }
   }
@@ -971,8 +971,8 @@ Deno.bench({
     const schema = v.number().negative();
     for (let i = 0; i < 10_000; i++) {
       try {
-        if (i % 2 === 0) schema(-3);
-        else schema(3);
+        if (i % 2 === 0) schema.check(-3);
+        else schema.check(3);
       } catch {}
     }
   }
@@ -1012,8 +1012,8 @@ Deno.bench({
     const schema = v.bigint().min(3n);
     for (let i = 0; i < 10_000; i++) {
       try {
-        if (i % 2 === 0) schema(3n);
-        else schema(2n);
+        if (i % 2 === 0) schema.check(3n);
+        else schema.check(2n);
       } catch {}
     }
   }
@@ -1052,8 +1052,8 @@ Deno.bench({
     const schema = v.bigint().max(3n);
     for (let i = 0; i < 10_000; i++) {
       try {
-        if (i % 2 === 0) schema(3n);
-        else schema(4n);
+        if (i % 2 === 0) schema.check(3n);
+        else schema.check(4n);
       } catch {}
     }
   }
@@ -1092,8 +1092,8 @@ Deno.bench({
     const schema = v.bigint().positive();
     for (let i = 0; i < 10_000; i++) {
       try {
-        if (i % 2 === 0) schema(3n);
-        else schema(-3n);
+        if (i % 2 === 0) schema.check(3n);
+        else schema.check(-3n);
       } catch {}
     }
   }
@@ -1132,8 +1132,8 @@ Deno.bench({
     const schema = v.bigint().negative();
     for (let i = 0; i < 10_000; i++) {
       try {
-        if (i % 2 === 0) schema(-3n);
-        else schema(3n);
+        if (i % 2 === 0) schema.check(-3n);
+        else schema.check(3n);
       } catch {}
     }
   }
@@ -1173,8 +1173,8 @@ Deno.bench({
     const schema = v.boolean();
     for (let i = 0; i < 10_000; i++) {
       try {
-        if (i % 2 === 0) schema(true);
-        else schema("false" as any);
+        if (i % 2 === 0) schema.check(true);
+        else schema.check("false" as any);
       } catch {}
     }
   }
@@ -1214,8 +1214,8 @@ Deno.bench({
     const schema = v.date().min(new Date(2023, 0, 1));
     for (let i = 0; i < 10_000; i++) {
       try {
-        if (i % 2 === 0) schema(new Date(2023, 0, 2));
-        else schema(new Date(2022, 11, 31));
+        if (i % 2 === 0) schema.check(new Date(2023, 0, 2));
+        else schema.check(new Date(2022, 11, 31));
       } catch {}
     }
   }
@@ -1254,8 +1254,8 @@ Deno.bench({
     const schema = v.date().max(new Date(2023, 11, 31));
     for (let i = 0; i < 10_000; i++) {
       try {
-        if (i % 2 === 0) schema(new Date(2023, 11, 30));
-        else schema(new Date(2024, 0, 1));
+        if (i % 2 === 0) schema.check(new Date(2023, 11, 30));
+        else schema.check(new Date(2024, 0, 1));
       } catch {}
     }
   }
