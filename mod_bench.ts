@@ -362,7 +362,7 @@ Deno.bench({
     for (let i = 0; i < 10_000; i++) {
       try {
         if (i % 2 === 0) schema.check("foo");
-        else schema.check("bar");
+        else schema.check("bar" as any);
       } catch {}
     }
   }
@@ -766,7 +766,7 @@ Deno.bench({
   name: "vali",
   group: "string().email() - 10k",
   fn: () => {
-    const schema = v.string().email();
+    const schema = v.email();
     for (let i = 0; i < 10_000; i++) {
       try {
         if (i % 2 === 0) schema.check("test@example.com");

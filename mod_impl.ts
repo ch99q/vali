@@ -352,8 +352,8 @@ export type { Infer as infer };
 /**
  * Add unique symbols for union and literal type inference
  */
-declare const __valiUnion: unique symbol;
-declare const __valiLiteral: unique symbol;
+const __valiUnion = Symbol.for('__valiUnion');
+const __valiLiteral = Symbol.for('__valiLiteral');
 
 /**
  * Collection of aliases for built-in validators.

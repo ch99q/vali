@@ -92,7 +92,7 @@ Deno.test("v.object()", () => {
     user: v.object({
       id: v.string(),
       profile: v.object({
-        email: v.string().email(),
+        email: v.email(),
         age: v.number().optional(),
       }),
     })
@@ -135,7 +135,7 @@ Deno.test("v.object()", () => {
     user: v.object({
       id: v.string(),
       profile: v.object({
-        email: v.string().email(),
+        email: v.email(),
         age: v.number().optional(),
       }).optional(),
     })
@@ -289,10 +289,6 @@ Deno.test("v.string()", () => {
   const lowercaseSchema = schema.lowercase();
   assertEquals(lowercaseSchema.check("hello"), "hello");
   assertThrows(() => lowercaseSchema.check("Hello"), [{ path: [], error: "string.lowercase" }]);
-
-  const emailSchema = schema.email();
-  assertEquals(emailSchema.check("acme@acme.com"), "acme@acme.com");
-  assertThrows(() => emailSchema.check("invalid-email"), [{ path: [], error: "string.invalid_email" }]);
 });
 
 Deno.test("v.number()", () => {
@@ -473,4 +469,34 @@ Deno.test("v.date()", () => {
   const maxSchema = schema.max(maxDate);
   assertEquals(maxSchema.check(new Date("2023-06-01T00:00:00Z")), new Date("2023-06-01T00:00:00Z"));
   assertThrows(() => maxSchema.check(new Date("2024-01-01T00:00:00Z")), [{ path: [], error: "date.max" }]);
+});
+
+Deno.test("v.<aliases>()", () => {
+  const emailSchema = v.email();
+  assertEquals(emailSchema.check("acme@acme.com"), "acme@acme.com");
+  assertThrows(() => emailSchema.check("invalid-email"), [{ path: [], error: "string.invalid_email" }]);
+
+  const urlSchema = v.url();
+  assertEquals(urlSchema.check("https://example.com"), "https://example.com");
+  assertThrows(() => urlSchema.check("not a url"), [{ path: [], error: "string.invalid_url" }]);
+
+  const uuidSchema = v.uuid();
+  assertEquals(uuidSchema.check("123e4567-e89b-12d3-a456-426614174000"), "123e4567-e89b-12d3-a456-426614174000");
+  assertThrows(() => uuidSchema.check("not-a-uuid"), [{ path: [], error: "string.invalid_uuid" }]);
+
+  const hexSchema = v.hex();
+  assertEquals(hexSchema.check("deadbeef"), "deadbeef");
+  assertThrows(() => hexSchema.check("nothex!"), [{ path: [], error: "string.invalid_hex" }]);
+
+  const ipSchema = v.ip();
+  assertEquals(ipSchema.check("192.168.1.1"), "192.168.1.1");
+  assertThrows(() => ipSchema.check("999.999.999.999"), [{ path: [], error: "string.invalid_ip" }]);
+
+  const macSchema = v.mac();
+  assertEquals(macSchema.check("00:1a:2b:3c:4d:5e"), "00:1a:2b:3c:4d:5e");
+  assertThrows(() => macSchema.check("notamac"), [{ path: [], error: "string.invalid_mac" }]);
+
+  const base64Schema = v.base64();
+  assertEquals(base64Schema.check("SGVsbG8="), "SGVsbG8=");
+  assertThrows(() => base64Schema.check("not base64!"), [{ path: [], error: "string.invalid_base64" }]);
 });
