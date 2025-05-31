@@ -17,7 +17,7 @@ const assertThrows = (fn: () => void, issues: Issue[]) => {
   }
 };
 
-Deno.test(".path()", () => {
+Deno.test("<type>.path()", () => {
   const strSchema = v.string().max(5).path("first_name");
 
   assertThrows(() => strSchema("Hello world"), [{ error: "string.max", path: ["first_name"] }])
@@ -26,19 +26,20 @@ Deno.test(".path()", () => {
     lv1: v.object({
       first_name: v.string().max(5).path("some_name")
     }).path("override_lv1"),
-    arr: v.array().min(2)
+    arr: v.object({
+      type: v.array(v.string()).min(1).path("things")
+    })
   }).path("root");
 
-
-  assertThrows(() => objSchema({ lv1: { first_name: "Hello world" }, arr: [] }), [
+  assertThrows(() => objSchema({ lv1: { first_name: "Hello world" }, arr: { type: [] } }), [
     { error: "string.max", path: ["root", "override_lv1", "some_name"] },
-    { error: "array.min", path: ["root", "arr"] }
+    { error: "array.min", path: ["root", "arr", "things"] }
   ])
 
 })
 
 Deno.test("v.array()", () => {
-  const schema = v.array();
+  const schema = v.array(v.number());
 
   assertEquals(schema([1, 2, 3]), [1, 2, 3]);
   assertEquals(schema([]), []);
@@ -65,11 +66,11 @@ Deno.test("v.array()", () => {
   assertEquals(uniqueSchema([1, 2, 3]), [1, 2, 3]);
   assertThrows(() => uniqueSchema([1, 2, 2]), [{ path: [], error: "array.unique" }]);
 
-  const itemsSchema = schema.items(v.number());
-  assertEquals(itemsSchema([1, 2, 3]), [1, 2, 3]);
-  assertThrows(() => itemsSchema([1, "not a number" as any]), [{ path: ["1"], error: "number.invalid_type" }]);
+  const itemsUnionSchema = v.array(v.union(v.string(), v.number()));
+  assertEquals(itemsUnionSchema([1, "two", 3]), [1, "two", 3]);
+  assertThrows(() => itemsUnionSchema([1, true as any, 3]), [{ path: ["1"], error: "union.invalid_type" }]);
 
-  const itemsOptionalSchema = schema.items(v.number().optional());
+  const itemsOptionalSchema = v.array(v.number().optional());
   assertEquals(itemsOptionalSchema([1, 2, 3]), [1, 2, 3]);
   assertEquals(itemsOptionalSchema([1, undefined, 3]), [1, undefined, 3]);
   assertThrows(() => itemsOptionalSchema([1, "not a number" as any]), [{ path: ["1"], error: "number.invalid_type" }]);

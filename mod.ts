@@ -56,8 +56,6 @@ type InputOf<S extends Record<string, Validator<any>>> =
   { [K in RequiredKeys<S>]: Infer<S[K]> } &
   { [K in OptionalKeys<S>]?: Exclude<Infer<S[K]>, undefined> }
 
-const INTERNAL_PATH = Symbol("custom_path");
-
 /**
  * Creates a validator builder with custom rules.
  * @param type The base type check function.
@@ -68,22 +66,21 @@ function validator<R extends Record<string, Rule<any, any[]>>>(
   type: (value: any) => true | string,
   rules: R
 ): Builder<R, R[keyof R] extends Rule<infer U, any[]> ? U : never> {
-  const path: string[] = [];
   let optional = false
   const build = (checks: V<any>[]): any => {
     const fn = ((v: any, safe?: boolean) => {
       if (optional && v === undefined) return safe ? { ok: true, value: v } : v
       const typeResult = type(v);
       if (typeResult !== true) {
-        if (safe) return { ok: false, issues: [{ path, error: typeResult as string, [INTERNAL_PATH]: path.length > 0 }] }
-        throw new ValidationError([{ path, error: typeResult as string, [INTERNAL_PATH]: path.length > 0 } as any])
+        if (safe) return { ok: false, issues: [{ path: fn.$path ? [fn.$path] : [], error: typeResult as string }] }
+        throw new ValidationError([{ path: fn.$path ? [fn.$path as any] : [], error: typeResult as string }])
       }
       let errs: Issue[] | null = null
       for (let i = 0, len = checks.length; i < len; ++i) {
         const res = checks[i](v)
         if (res !== true) {
           if (!errs) errs = []
-          errs.push({ path, error: res as string, [INTERNAL_PATH]: path.length > 0 } as any)
+          errs.push({ path: fn.$path ? [fn.$path] : [], error: res as string } as any)
         }
       }
       if (errs) {
@@ -97,8 +94,7 @@ function validator<R extends Record<string, Rule<any, any[]>>>(
       return fn
     }
     fn.path = (initialPath: string) => {
-      if (path.length > 0) path[path.length - 1] = initialPath;
-      path.push(initialPath);
+      (fn as any).$path = initialPath;
       return fn;
     }
     for (const k in rules) {
@@ -117,21 +113,21 @@ function validator<R extends Record<string, Rule<any, any[]>>>(
 function object<S extends Record<string, Validator<any>>>(
   schema: S
 ): Validator<InputOf<S>> & { optional: () => Validator<InputOf<S> | undefined>, path: (initialPath: string) => Validator<InputOf<S>> } {
-  const path: string[] = [];
   let optional = false
   const fn = ((x: any, safe?: boolean) => {
+    const fn_path = (fn as any).$path;
     if (optional && x === undefined) return safe ? { ok: true, value: x } : x
     if (typeof x !== 'object' || x === null || Array.isArray(x)) {
-      if (safe) return { ok: false, issues: [{ path, error: "object.invalid_type" }] }
-      throw new ValidationError([{ path, error: "object.invalid_type" }])
+      if (safe) return { ok: false, issues: [{ path: [], error: "object.invalid_type" }] }
+      throw new ValidationError([{ path: [], error: "object.invalid_type" }])
     }
     const issues: Issue[] = []
     for (const key in schema) {
       const result = (schema[key] as any)(x[key], true)
       if (!result.ok) {
+        const key_path = (schema[key] as any).$path;
         for (const i of result.issues) {
-          console.log(key, i)
-          issues.push({ path: [...path, ...(i.path.length ? i.path : [String(key)])], error: i.error })
+          issues.push({ path: [...[fn_path, !key_path ? key : undefined].filter(Boolean), ...i.path], error: i.error })
         }
       }
     }
@@ -146,38 +142,45 @@ function object<S extends Record<string, Validator<any>>>(
     return fn as Validator<InputOf<S> | undefined>
   }
   fn.path = (initialPath: string) => {
-    if (path.length > 0) path[path.length - 1] = initialPath;
-    path.push(initialPath);
+    (fn as any).$path = initialPath;
     return fn;
   }
   return fn
 }
 
 /**
- * Creates a validator for arrays with optional rules.
+ * Creates a validator for arrays with optional rules and element validator.
  * @template U The array element type.
+ * @param itemValidator The validator for array elements.
  * @returns A validator builder for arrays.
  * @example
- * v.array<number>().min(1).max(5)
+ * array(string().min(3)).min(1).max(5)
  */
-const array = <U = any>() => validator((a: U[]) => Array.isArray(a) ? true : 'array.invalid_type', {
-  min: (len: number, e = 'array.min') => (a: U[]) => a.length >= len ? true : e,
-  max: (len: number, e = 'array.max') => (a: U[]) => a.length <= len ? true : e,
-  unique: (e = 'array.unique') => (a: U[]) => new Set(a).size === a.length ? true : e,
-  items: (itemValidator: Validator<U>) => (a: U[]) => {
+const array = <U>(type: Validator<U>) => validator(
+  ((a: U[], safe: boolean) => {
+    if (!Array.isArray(a)) return 'array.invalid_type';
     const issues: Issue[] = [];
     for (let i = 0; i < a.length; i++) {
-      const result = (itemValidator as any)(a[i], true);
+      const result = (type as any)(a[i], true);
       if (!result.ok) {
         for (const issue of result.issues) {
-          issues.push({ path: [String(i), ...issue.path], error: issue.error });
+          issues.push({ path: [(type as any).$path, String(i), ...issue.path].filter(Boolean), error: issue.error });
         }
       }
     }
-    if (issues.length) throw new ValidationError(issues);
+    if (issues.length > 0) {
+      if (safe) return { ok: false, issues };
+      throw new ValidationError(issues);
+    }
+    if (safe) return { ok: true, value: a };
     return true;
+  }) as unknown as V<U[]>,
+  {
+    min: (len: number, e = 'array.min') => (a: U[]) => a.length >= len ? true : e,
+    max: (len: number, e = 'array.max') => (a: U[]) => a.length <= len ? true : e,
+    unique: (e = 'array.unique') => (a: U[]) => new Set(a).size === a.length ? true : e,
   }
-})
+)
 
 /**
  * Creates a validator that accepts any of the provided validators.

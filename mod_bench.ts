@@ -47,13 +47,13 @@ Deno.bench({
   name: "vali",
   group: "array() - 10k",
   fn: () => {
-    const schema = v.array().items(v.string());
+    const schema = v.array(v.string());
     for (let i = 0; i < 10_000; i++) {
       try {
         if (i % 2 === 0) {
           schema(["a", "b", "c"]); // valid
         } else {
-          schema(["a", "b", "c", 1]); // invalid
+          schema(["a", "b", "c", 1 as any]); // invalid
         }
       } catch {
         // ignore validation errors
@@ -103,7 +103,7 @@ Deno.bench({
   name: "vali",
   group: "array().min(3) - 10k",
   fn: () => {
-    const schema = v.array().items(v.string()).min(3);
+    const schema = v.array(v.string()).min(3);
     for (let i = 0; i < 10_000; i++) {
       try {
         if (i % 2 === 0) {
@@ -159,7 +159,7 @@ Deno.bench({
   name: "vali",
   group: "array().max(3) - 10k",
   fn: () => {
-    const schema = v.array().items(v.string()).max(3);
+    const schema = v.array(v.string()).max(3);
     for (let i = 0; i < 10_000; i++) {
       try {
         if (i % 2 === 0) {
@@ -221,7 +221,7 @@ Deno.bench({
   name: "vali",
   group: "array().unique() - 10k",
   fn: () => {
-    const schema = v.array().items(v.string()).unique();
+    const schema = v.array(v.string()).unique();
     for (let i = 0; i < 10_000; i++) {
       try {
         if (i % 2 === 0) {
