@@ -1,6 +1,10 @@
 {
   "imports": {
     "@hono/hono": "jsr:@hono/hono@^4.7.10",
+    "@hono/otel": "npm:@hono/otel@^0.2.0",
     "@ch99q/vali": "../../mod.ts"
+  },
+  "tasks": {
+    "test": "OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318 deno test --allow-net --allow-env --allow-read --allow-write mod_test.ts"
   }
 }
