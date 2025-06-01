@@ -6,8 +6,9 @@
  * @property error The error message describing the issue.
  */
 export interface Issue {
-  path: string[]
-  error: string
+  path: string[];
+  error: string;
+  key: string;
 }
 
 /**
@@ -16,9 +17,15 @@ export interface Issue {
  * @property issues The list of validation issues.
  */
 export class ValidationError extends Error {
-  constructor(public issues: Issue[]) {
-    super("Validation failed [" + issues.map(i => i.error).join(", ") + "]")
-    this.name = "ValidationError"
+  issues: Issue[];
+  constructor(issues: { path: string[]; error: string }[]) {
+    super("Validation failed [" + issues.map(i => i.error).join(", ") + "]");
+    this.name = "ValidationError";
+    // Always add key to each issue
+    this.issues = issues.map(issue => ({
+      ...issue,
+      key: `${issue.path.join('.')}@${issue.error}`
+    }));
   }
 }
 
@@ -74,17 +81,18 @@ function validator<R extends Record<string, Rule<any, any[]>>>(
   const build = (checks: V<any>[]): any => {
     function fn(v: any, safe?: boolean) {
       if (optional && v === undefined) return safe ? { ok: true, value: v } : v
-      const typeResult = type(v);
-      if (typeResult !== true) {
-        if (safe) return { ok: false, issues: [{ path: (fn as any).$path ? [(fn as any).$path] : [], error: typeResult as string }] }
-        throw new ValidationError([{ path: (fn as any).$path ? [(fn as any).$path as any] : [], error: typeResult as string }])
+      const fn_path = (fn as any).$path;
+      const typeCheck = type(v);
+      if (typeCheck !== true) {
+        if (safe) return { ok: false, issues: [{ path: [], error: typeCheck }] }
+        throw new ValidationError([{ path: fn_path ? [fn_path] : [], error: typeCheck }])
       }
       let errs: Issue[] | null = null
       for (let i = 0, len = checks.length; i < len; ++i) {
         const res = checks[i](v)
         if (res !== true) {
           if (!errs) errs = []
-          errs.push({ path: (fn as any).$path ? [(fn as any).$path] : [], error: res as string } as any)
+          errs.push({ path: safe ? [] : fn_path ? [fn_path] : [], error: res as string } as any)
         }
       }
       if (errs) {
@@ -124,15 +132,14 @@ function object<S extends Record<string, Validator<any>>>(
     if (optional && x === undefined) return safe ? { ok: true, value: x } : x
     if (typeof x !== 'object' || x === null || Array.isArray(x)) {
       if (safe) return { ok: false, issues: [{ path: [], error: "object.invalid_type" }] }
-      throw new ValidationError([{ path: [], error: "object.invalid_type" }])
+      throw new ValidationError([{ path: fn_path ? [fn_path] : [], error: "object.invalid_type" }])
     }
     const issues: Issue[] = []
     for (const key in schema) {
       const result = (schema[key] as any)(x[key], true)
       if (!result.ok) {
-        const key_path = (schema[key] as any).$path;
         for (const i of result.issues) {
-          issues.push({ path: [...[fn_path, !key_path ? key : undefined].filter(Boolean), ...i.path], error: i.error })
+          issues.push({ path: (!safe && fn_path) ? [fn_path, key, ...i.path] : [key, ...i.path], error: i.error, key } as Issue)
         }
       }
     }
@@ -170,7 +177,7 @@ const array = <U>(type: Validator<U>) => validator(
       const result = (type as any)(a[i], true);
       if (!result.ok) {
         for (const issue of result.issues) {
-          issues.push({ path: [(type as any).$path, String(i), ...issue.path].filter(Boolean), error: issue.error });
+          issues.push({ path: [(type as any).$path, String(i), ...issue.path].filter(Boolean), error: issue.error } as Issue);
         }
       }
     }
@@ -196,18 +203,23 @@ const array = <U>(type: Validator<U>) => validator(
 const union = <T extends Validator<any>[]>(validators: T) => {
   let optional = false;
   function fn(value: any, safe?: boolean) {
+    const fn_path = (fn as any).$path;
     if (optional && value === undefined) return safe ? { ok: true, value } : value;
     for (const validator of validators) {
       const result = (validator as any)(value, true);
       if (result && result.ok) return safe ? result : result.value;
     }
     if (safe) return { ok: false, issues: [{ path: [], error: "union.invalid_type" }] };
-    throw new ValidationError([{ path: [], error: "union.invalid_type" }]);
+    throw new ValidationError([{ path: fn_path ? [fn_path] : [], error: "union.invalid_type" }]);
   }
   fn.check = fn;
   fn.optional = () => {
     optional = true;
     return fn as typeof fn & { [__valiUnion]: Infer<T[number]> | undefined };
+  };
+  fn.path = (initialPath: string) => {
+    (fn as any).$path = initialPath;
+    return fn;
   };
   // Attach the __valiUnion symbol for type inference
   (fn as any)[__valiUnion] = (undefined as unknown) as Infer<T[number]>;
@@ -220,18 +232,23 @@ const union = <T extends Validator<any>[]>(validators: T) => {
  * @param error The error message to use.
  * @returns A validator for the literal value.
  */
-const literal = <const T>(value: T, error = "literal.invalid_value"): Validator<T> & { optional: () => Validator<T | undefined> } & { [__valiLiteral]: T } => {
+const literal = <const T>(value: T, error = "literal.invalid_value"): Validator<T> & { optional: () => Validator<T | undefined>, path: (initialPath: string) => Validator<T> } & { [__valiLiteral]: T } => {
   let optional = false;
   function fn(x: any, safe?: boolean) {
+    const fn_path = (fn as any).$path;
     if (optional && x === undefined) return safe ? { ok: true, value: x } : x;
     if (x === value) return safe ? { ok: true, value: x } : x;
     if (safe) return { ok: false, issues: [{ path: [], error }] };
-    throw new ValidationError([{ path: [], error }]);
+    throw new ValidationError([{ path: fn_path ? [fn_path] : [], error }]);
   }
   fn.check = fn;
   fn.optional = () => {
     optional = true;
     return fn as typeof fn & { [__valiLiteral]: T | undefined };
+  };
+  fn.path = (initialPath: string) => {
+    (fn as any).$path = initialPath;
+    return fn;
   };
   // Attach the __valiLiteral symbol for type inference
   (fn as any)[__valiLiteral] = value;
@@ -243,19 +260,24 @@ const literal = <const T>(value: T, error = "literal.invalid_value"): Validator<
  * @param values The allowed values.
  * @returns A validator for the enum.
  */
-const enumeration = <T extends string | number>(...values: T[]): Validator<T> & { optional: () => Validator<T | undefined> } => {
+const enumeration = <T extends string | number>(...values: T[]): Validator<T> & { optional: () => Validator<T | undefined>, path: (initialPath: string) => Validator<T> } => {
   const set = new Set(values)
   let optional = false
   function fn(x: any, safe?: boolean) {
+    const fn_path = (fn as any).$path;
     if (optional && x === undefined) return safe ? { ok: true, value: x } : x
     if (set.has(x)) return safe ? { ok: true, value: x } : x
     if (safe) return { ok: false, issues: [{ path: [], error: "enum.invalid_value" }] }
-    throw new ValidationError([{ path: [], error: "enum.invalid_value" }])
+    throw new ValidationError([{ path: fn_path ? [fn_path] : [], error: "enum.invalid_value" }])
   }
   fn.check = fn;
   fn.optional = () => {
     optional = true
     return fn as Validator<T | undefined>
+  }
+  fn.path = (initialPath: string) => {
+    (fn as any).$path = initialPath;
+    return fn;
   }
   return fn as any;
 }
@@ -264,16 +286,17 @@ const record = <K extends string, V>(type: Validator<V>) => {
   let optional = false;
   function fn(x: any, safe?: boolean) {
     if (optional && x === undefined) return safe ? { ok: true, value: x } : x;
+    const fn_path = (fn as any).$path;
     if (typeof x !== 'object' || x === null || Array.isArray(x)) {
       if (safe) return { ok: false, issues: [{ path: [], error: "record.invalid_type" }] };
-      throw new ValidationError([{ path: [], error: "record.invalid_type" }]);
+      throw new ValidationError([{ path: fn_path ? [fn_path] : [], error: "record.invalid_type" }]);
     }
     const issues: Issue[] = [];
     for (const key in x) {
       const valueResult = (type as any)(x[key], true);
       if (!valueResult.ok) {
         for (const issue of valueResult.issues) {
-          issues.push({ path: [key, ...issue.path], error: issue.error });
+          issues.push({ path: [key, ...issue.path], error: issue.error } as Issue);
         }
       }
     }
@@ -299,18 +322,23 @@ const record = <K extends string, V>(type: Validator<V>) => {
  * Creates a validator for boolean values.
  * @returns A validator for booleans.
  */
-const boolean = (): Validator<boolean> & { optional: () => Validator<boolean | undefined> } => {
+const boolean = (): Validator<boolean> & { optional: () => Validator<boolean | undefined>, path: (initialPath: string) => Validator<boolean> } => {
   let optional = false;
   function fn(x: any, safe?: boolean) {
+    const fn_path = (fn as any).$path;
     if (optional && x === undefined) return safe ? { ok: true, value: x } : x;
     if (typeof x === 'boolean') return safe ? { ok: true, value: x } : x;
     if (safe) return { ok: false, issues: [{ path: [], error: "boolean.invalid_type" }] };
-    throw new ValidationError([{ path: [], error: "boolean.invalid_type" }]);
+    throw new ValidationError([{ path: fn_path ? [fn_path] : [], error: "boolean.invalid_type" }]);
   }
   fn.check = fn;
   fn.optional = () => {
     optional = true;
     return fn as Validator<boolean | undefined>;
+  };
+  fn.path = (initialPath: string) => {
+    (fn as any).$path = initialPath;
+    return fn;
   };
   return fn as any;
 }
@@ -415,3 +443,8 @@ export const base64 = () => string().regex(
   /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/,
   'string.invalid_base64'
 );
+
+/**
+ * Collection of built-in validators for common queries.
+ */
+export const find = () => literal<boolean>(true, 'query.not_found');

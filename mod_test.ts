@@ -2,14 +2,18 @@
 import { v } from "./mod.ts";
 import { assertEquals } from "jsr:@std/assert@^1.0.0";
 
-const assertThrows = (fn: () => void, issues: v.Issue[]) => {
+const assertThrows = (fn: () => void, issues: Array<Omit<v.Issue, "key">>) => {
   try {
     fn();
     throw new Error("Expected function to throw");
   } catch (error) {
     if (error instanceof Error && error.name === "ValidationError") {
-      // Use type assertion to access 'issues'
-      assertEquals((error as any).issues as v.Issue[], issues);
+      // Add 'key' to each expected issue for comparison
+      const withKey = issues.map(issue => ({
+        ...issue,
+        key: `${issue.path.join('.')}@${issue.error}`
+      }));
+      assertEquals((error as any).issues as v.Issue[], withKey);
     } else {
       throw error;
     }
@@ -17,24 +21,94 @@ const assertThrows = (fn: () => void, issues: v.Issue[]) => {
 };
 
 Deno.test("<type>.path()", () => {
+  // Checking validator primitives with path overrides.
   const strSchema = v.string().max(5).path("first_name");
-
+  const defStrSchema = v.string().max(5);
+  assertThrows(() => strSchema.check(23123 as any), [{ error: "string.invalid_type", path: ["first_name"] }])
   assertThrows(() => strSchema.check("Hello world"), [{ error: "string.max", path: ["first_name"] }])
+  assertThrows(() => defStrSchema.check(23123 as any), [{ error: "string.invalid_type", path: [] }]);
 
-  const objSchema = v.object({
-    lv1: v.object({
-      first_name: v.string().max(5).path("some_name")
-    }).path("override_lv1"),
-    arr: v.object({
-      type: v.array(v.string()).min(1).path("things")
-    })
-  }).path("root");
+  // Checking boolean with path override.
+  const boolSchema = v.boolean().path("is_active");
+  const defBoolSchema = v.boolean();
+  assertThrows(() => boolSchema.check("not a boolean" as any), [{ error: "boolean.invalid_type", path: ["is_active"] }]);
+  assertThrows(() => defBoolSchema.check("not a boolean" as any), [{ error: "boolean.invalid_type", path: [] }]);
 
-  assertThrows(() => objSchema.check({ lv1: { first_name: "Hello world" }, arr: { type: [] } }), [
-    { error: "string.max", path: ["root", "override_lv1", "some_name"] },
-    { error: "array.min", path: ["root", "arr", "things"] }
-  ])
+  // Checking record with path override.
+  const recSchema = v.record(v.string()).path("user_data");
+  const defRecSchema = v.record(v.string());
+  assertThrows(() => recSchema.check("not an object" as any), [{ error: "record.invalid_type", path: ["user_data"] }]);
+  assertThrows(() => defRecSchema.check("not an object" as any), [{ error: "record.invalid_type", path: [] }]);
 
+  // Checking enum with path override.
+  const enumSchema = v.enum("apple", "banana", "cherry").path("fruit_type");
+  const defEnumSchema = v.enum("apple", "banana", "cherry");
+  assertThrows(() => enumSchema.check("orange" as any), [{ error: "enum.invalid_value", path: ["fruit_type"] }]);
+  assertThrows(() => defEnumSchema.check("orange" as any), [{ error: "enum.invalid_value", path: [] }]);
+
+  // Checking literal with path override.
+  const literalSchema = v.literal("test").path("status");
+  const defLiteralSchema = v.literal("test");
+  assertThrows(() => literalSchema.check("not test" as any), [{ error: "literal.invalid_value", path: ["status"] }]);
+  assertThrows(() => defLiteralSchema.check("not test" as any), [{ error: "literal.invalid_value", path: [] }]);
+
+  // Checking union with path override.
+  const unionSchema = v.union([v.string(), v.number()]).path("value");
+  const defUnionSchema = v.union([v.string(), v.number()]);
+  assertThrows(() => unionSchema.check(true as any), [{ error: "union.invalid_type", path: ["value"] }]);
+  assertThrows(() => defUnionSchema.check({} as any), [{ error: "union.invalid_type", path: [] }]);
+
+  // Checking array with path override.
+  const arraySchema = v.array(v.string()).path("tags");
+  const defArraySchema = v.array(v.string());
+  assertThrows(() => arraySchema.check(123 as any), [{ error: "array.invalid_type", path: ["tags"] }]);
+  assertThrows(() => defArraySchema.check(123 as any), [{ error: "array.invalid_type", path: [] }]);
+
+  // Checking object with path override.
+  const userSchema = v.object({
+    name: v.string().max(50).path("user_name"),
+    age: v.number().min(0).optional().path("user_age"),
+  }).path("user_info");
+  const defUserSchema = v.object({
+    name: v.string().max(50),
+    age: v.number().min(0).optional(),
+  });
+  assertThrows(() => userSchema.check({ name: 123 as any }), [{ error: "string.invalid_type", path: ["user_info", "name"] }]);
+  assertThrows(() => userSchema.check({ name: "Alice", age: "not a number" as any }), [{ error: "number.invalid_type", path: ["user_info", "age"] }]);
+  assertThrows(() => defUserSchema.check({ name: 123 as any }), [{ error: "string.invalid_type", path: ["name"] }]);
+  assertThrows(() => defUserSchema.check({ name: "Alice", age: "not a number" as any }), [{ error: "number.invalid_type", path: ["age"] }]);
+
+  // Checking nested object with path override.
+  const nestedSchema = v.object({
+    user: userSchema,
+    str: v.string().max(10).path("description"),
+    bool: v.boolean().path("is_active"),
+    rec: v.record(v.string()).path("user_data"),
+    enum: v.enum("apple", "banana", "cherry").path("fruit_type"),
+    literal: v.literal("test").path("status"),
+    union: v.union([v.string(), v.number()]).path("value"),
+    array: v.array(v.string()).path("tags"),
+  }).path("data");
+  assertThrows(() => nestedSchema.check({ 
+    user: { name: 123 as any, age: -5 },
+    str: "This is a test string that is way too long for the max length",
+    bool: "not a boolean" as any,
+    rec: "not an object" as any,
+    enum: "orange" as any,
+    literal: "not test" as any,
+    union: true as any,
+    array: 123 as any,
+  }), [
+    { error: "string.invalid_type", path: ["data", "user", "name"] },
+    { error: "number.min", path: ["data", "user", "age"] },
+    { error: "string.max", path: ["data", "str"] },
+    { error: "boolean.invalid_type", path: ["data", "bool"] },
+    { error: "record.invalid_type", path: ["data", "rec"] },
+    { error: "enum.invalid_value", path: ["data", "enum"] },
+    { error: "literal.invalid_value", path: ["data", "literal"] },
+    { error: "union.invalid_type", path: ["data", "union"] },
+    { error: "array.invalid_type", path: ["data", "array"] },
+  ]);
 })
 
 Deno.test("v.array()", () => {
